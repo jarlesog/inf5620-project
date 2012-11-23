@@ -31,7 +31,7 @@ p_in = Expression("2000*sin(3.0*t)", t=0.0)
 
 
 # Define the rate function
-R = Expression("3*(1-x[0])*x[0]*(1-x[1])*x[1]")
+R = Expression("(3*(1-x[0])*x[0]*(1-x[1])*x[1])*(t + 1)", t = 0.0)
 
 # Define boundary conditions
 noslip  = DirichletBC(V, (0, 0),
@@ -45,7 +45,7 @@ bcp = [inflow, outflow]
 
 # Define boundray conditions on phi
 ###Not tested
-noslipphi = DirichletBC(Q, 1, "on_boundary && \
+noslipphi = DirichletBC(Q, 0, "on_boundary && \
                             (x[0] < DOLFIN_EPS | x[1] < DOLFIN_EPS | \
                                  (x[0] > 0.5 - DOLFIN_EPS && x[1] > 0.5 - DOLFIN_EPS))")
 inoutflow = DirichletBC(Q, 1, "x[1] > 1.0 - DOLFIN_EPS | \
@@ -58,7 +58,10 @@ u0 = Function(V)
 u1 = Function(V)
 p1 = Function(Q)
 phi0=Function(Q) # Maa ikke veare null
-phi0=Expression("1.0")#Mulig jeg kan bruke Constant(1)
+#Problem, denne overskriver function egenskapen
+phi1=Expression("1.0")#Mulig jeg kan bruke Constant(1)
+phi0.assign(phi1)
+#u0.assign(u1)
 
 # Define coefficients
 k = Constant(dt)
@@ -87,8 +90,8 @@ print '__________'
 #F4 = (1/k)*inner(phi-phi0, psi)*dx + inner(R*phi, psi)*dx + C*inner(grad(phi),grad(psi))*dx + inner(grad(phi)*u1,psi)*dx
     #+ C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx
 
-F4 = (1/k)*inner(phi-phi0, psi)*dx #+ inner((grad(phi)*psi),u1)*dx \
-   # + C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx#Is this implicit?
+F4 = (1/k)*inner(phi-phi0, psi)*dx + inner((grad(phi)*psi),u1)*dx \
+    + C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx#Is this implicit?
 a4 = lhs(F4)
 L4 = rhs(F4)
 
@@ -101,14 +104,14 @@ A4 = assemble(a4)
 # Create files for storing solution
 ufile = File("results/velocity.pvd")
 pfile = File("results/pressure.pvd")
-
+phifile=File("results/phi.pvd")
 # Time-stepping
 t = dt
 while t < T + DOLFIN_EPS:
 
     # Update pressure boundary condition
     p_in.t = t
-
+    R.t = t
     # Compute tentative velocity step
     begin("Computing tentative velocity")
     b1 = assemble(L1)
@@ -141,10 +144,11 @@ while t < T + DOLFIN_EPS:
     # Plot solution
     plot(p1, title="Pressure", rescale=True)
     plot(u1, title="Velocity", rescale=True)
-
+    plot(phi0,title="phi    ",rescale=True)
     # Save to file
     ufile << u1
     pfile << p1
+    phifile<<phi0
 
     # Move to next time step
     u0.assign(u1)
