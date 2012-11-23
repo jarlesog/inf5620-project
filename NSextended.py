@@ -15,16 +15,23 @@ Q = FunctionSpace(mesh, "CG", 1)
 # Define trial and test functions
 u = TrialFunction(V)
 p = TrialFunction(Q)
+phi=TrialFunction(Q)
 v = TestFunction(V)
 q = TestFunction(Q)
+psi=TestFunction(Q)
 
 # Set parameter values
 dt = 0.01
 T = 3
 nu = 0.01
+C = 1.0 #Diffution constant
 
 # Define time-dependent pressure boundary condition
-p_in = Expression("sin(3.0*t)", t=0.0)
+p_in = Expression("2000*sin(3.0*t)", t=0.0)
+
+
+# Define the rate function
+R = Expression("3*(1-x[0])*x[0]*(1-x[1])*x[1]")
 
 # Define boundary conditions
 noslip  = DirichletBC(V, (0, 0),
@@ -36,18 +43,30 @@ outflow = DirichletBC(Q, 0, "x[0] > 1.0 - DOLFIN_EPS")
 bcu = [noslip]
 bcp = [inflow, outflow]
 
+# Define boundray conditions on phi
+###Not tested
+noslipphi = DirichletBC(Q, 1, "on_boundary && \
+                            (x[0] < DOLFIN_EPS | x[1] < DOLFIN_EPS | \
+                                 (x[0] > 0.5 - DOLFIN_EPS && x[1] > 0.5 - DOLFIN_EPS))")
+inoutflow = DirichletBC(Q, 1, "x[1] > 1.0 - DOLFIN_EPS | \
+                            x[0] > 1.0 - DOLFIN_EPS")
+bcphi = [noslipphi, inoutflow]
+###Not tested
+
 # Create functions
 u0 = Function(V)
 u1 = Function(V)
 p1 = Function(Q)
+phi0=Function(Q) # Maa ikke veare null
+phi0=Expression("1.0")#Mulig jeg kan bruke Constant(1)
 
 # Define coefficients
 k = Constant(dt)
 f = Constant((0, 0))
 
 # Tentative velocity step
-F1 = (1/k)*inner(u - u0, v)*dx + inner(grad(u0)*u0, v)*dx + \
-     nu*inner(grad(u), grad(v))*dx - inner(f, v)*dx
+F1 = (1/k)*inner(u - u0, v)*dx + inner(grad(u)*u0, v)*dx + \
+     nu*inner(grad(u), grad(v))*dx - inner(f, v)*dx #Semi implicit
 a1 = lhs(F1)
 L1 = rhs(F1)
 
@@ -59,10 +78,25 @@ L2 = -(1/k)*div(u1)*q*dx
 a3 = inner(u, v)*dx
 L3 = inner(u1, v)*dx - k*inner(grad(p1), v)*dx
 
+# phi update
+
+print type(u)
+print '__________'
+print type(u1), len(u1)
+print '__________'
+#F4 = (1/k)*inner(phi-phi0, psi)*dx + inner(R*phi, psi)*dx + C*inner(grad(phi),grad(psi))*dx + inner(grad(phi)*u1,psi)*dx
+    #+ C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx
+
+F4 = (1/k)*inner(phi-phi0, psi)*dx #+ inner((grad(phi)*psi),u1)*dx \
+   # + C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx#Is this implicit?
+a4 = lhs(F4)
+L4 = rhs(F4)
+
 # Assemble matrices
 A1 = assemble(a1)
 A2 = assemble(a2)
 A3 = assemble(a3)
+A4 = assemble(a4)
 
 # Create files for storing solution
 ufile = File("results/velocity.pvd")
@@ -95,7 +129,15 @@ while t < T + DOLFIN_EPS:
     [bc.apply(A3, b3) for bc in bcu]
     solve(A3, u1.vector(), b3, "gmres", "default")
     end()
-
+    
+    #Phi solveing
+    begin("Computeing phi")
+    b4 = assemble(L4)
+    [bc.apply(A4, b4) for bc in bcphi]
+    solve(A4, phi0.vector(), b4, "gmres", "amg")
+    #Fyll ut her
+    end()
+    
     # Plot solution
     plot(p1, title="Pressure", rescale=True)
     plot(u1, title="Velocity", rescale=True)

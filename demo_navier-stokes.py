@@ -49,7 +49,7 @@ T = 3
 nu = 0.01
 
 # Define time-dependent pressure boundary condition
-p_in = Expression("sin(3.0*t)", t=0.0)
+p_in = Expression("2000*sin(3.0*t)", t=0.0)
 
 # Define boundary conditions
 noslip  = DirichletBC(V, (0, 0),
@@ -71,7 +71,7 @@ k = Constant(dt)
 f = Constant((0, 0))
 
 # Tentative velocity step
-F1 = (1/k)*inner(u - u0, v)*dx + inner(grad(u0)*u0, v)*dx + \
+F1 = (1/k)*inner(u - u0, v)*dx + inner(grad(u)*u0, v)*dx + \
      nu*inner(grad(u), grad(v))*dx - inner(f, v)*dx
 a1 = lhs(F1)
 L1 = rhs(F1)

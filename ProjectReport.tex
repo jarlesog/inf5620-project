@@ -1,9 +1,10 @@
-\documentclass[12pt,a4paper,norsk]{article}
+\documentclass[12pt,a4paper,english]{article}
 \usepackage[latin1]{inputenc}
 \usepackage[T1]{fontenc} %for å bruke æøå
 \usepackage{graphicx}%for å inkludere grafikk
 \usepackage{verbatim} %for å inkludere filer med tegn LaTeX ikke liker
-\usepackage{babel,url}
+\usepackage{hyperref}%To include web address 
+\usepackage{babel,url}%Denne kan ha samme namespace som den over
 \usepackage{amsmath}
 \usepackage{listings}
 
@@ -12,17 +13,123 @@
 \bibliographystyle{plain}
 
 
-\title{INF5610 Project: Beeler-Reuter model}
+\title{INF5620 Project\\ Extended Navier-Stokes solver for Platelet Aggregation}
 \author{Jarle Sogn\\ Institutt for matematikk\\
 Universitetet i Oslo\\ \url{jarlesog@math.no}}
 
 \begin{document}
 \maketitle
 
+\begin{abstract}
+%hensikt
+%Gjennomføring
+%viktigste konklusjonene i oppgave
+The aim of the project is to solve an extended set of Navier-Stokes equations by the finite element method and \textit{fenics}. The model I'm using is a simplification of model found in Aaron L. Fogelson article: \href{http://www.jstor.org/stable/2102193}{\textbf{Continuum models of platelet aggregation: Formulation and mechanical properties}}. I will focus mainly on equation 1 - 3 in this article. My solver is an extantion of \href{http://fenicsproject.org/documentation/dolfin/1.0.0/python/demo/pde/navier-stokes/python/documentation.html}{\textit{fenics}} Navier-Stoke demo.
+%This project might be relevant for my master thesis. 
 
-\section*{Exercise 1: Upstroke velocity}
-\subsection*{a)}
+\end{abstract}
 
+\section*{The Model}
+%\subsection*{a)}
+
+I focus on equation 1 - 3 from the article, witch are:
+
+\begin{equation}
+\rho \left(\textbf{u}_t + \textbf{u} \cdot \nabla \textbf{u} \right) = -\nabla p + \mu \Delta \textbf{u} + \textbf{f}^g 
+\label{eq:MainNS}
+\end{equation}
+ 
+\begin{equation}
+\nabla \cdot \textbf{u} = 0
+\label{eq:MainIncompressible}
+\end{equation}
+
+\begin{equation}
+\frac{\partial \phi}{\partial t} + \textbf{u} \cdot \nabla \phi = C\Delta \phi - R\left( c \right)\phi 
+\label{eq:MainPhi}
+\end{equation}
+
+The first two equation are Navier-Stokes equations for incompressible fluid. $\textbf{u}\left(t, \textbf{x} \right)$ is the fluid velocity field, $p\left(t, \textbf{x} \right)$ is the pressure, $\rho$ is the fluid's mass density(I'll sett this equal to 1, for simplicity.) and $\mu$ is the fluids viscosity(assumed to be constant). $\epsilon^{-3} \phi$ is the concentration of non-activated platelet($\epsilon^{-3}$ is a scaling constant). $C$ is a diffusion constant\footnote{Fogelson article uses $D_n$ and $\phi_n$ for $C$ and $\phi$.}. The term $R\left( c \right)\phi$ is the rate in which the non-activated platelets are converted to active platelets. This depends on the ADP concentration $c$, which vary. Since I'm not using the equation for $c$, I will have to manufacture a suitable function $c\left( \textbf{x}, t\right)$\footnote{To understand the equations and symbols better, I advise you to take a look at the first few first pages of Fogelson article}.     	
+
+
+\subsection*{Solving Navier-Stokes equation}
+Now I'm in detail going to talk about one way of solving the Navier-Stokes equations(\ref{eq:MainNS} and \ref{eq:MainIncompressible}) with \textit{fenics} and the finite element method. I will use Chorin's projection method. The idea is first to compute a tentative velocity($\textbf{u}^\star$) by ignoring the pressure in equation \ref{eq:MainNS} and then project the velocity onto the space of divergence free vector fields. Equation \ref{eq:MainNS} then becomes:
+
+$$
+\frac{\partial}{\partial t} \textbf{u}^\star + \textbf{u} \cdot \nabla \textbf{u} - \mu \Delta \textbf{u}^\star = \textbf{f}^g
+$$
+
+Let $V = H^{1}_{0}\left( \Omega \right) $ be a Sobolev space and $\Omega$ the domain. I want to write the equation above as a weak formulation. I multiply with the function $\textbf{v}\left(\textbf{x} \right)$ and integrate the space.
+
+$$
+\int_\Omega \frac{\partial \textbf{u}^\star}{\partial t} \cdot \textbf{v} + \left( \textbf{u} \cdot \nabla \textbf{u}\right) \cdot \textbf{v} -\mu \Delta \textbf{u}^\star \cdot \textbf{v} d\textbf{x} = \int_\Omega \textbf{f}^g \cdot \textbf{v} d\textbf{x} \quad \forall \textbf{v} \in V
+$$
+Now if I integrate by parts the lest term in the left hand side(or use Green's formula), I obtain:
+$$
+\int_\Omega \frac{\partial \textbf{u}^\star}{\partial t} \cdot \textbf{v} + \left( \textbf{u} \cdot \nabla \textbf{u}\right) \cdot \textbf{v} +\mu \nabla \textbf{u}^\star \cdot \nabla \textbf{v} d\textbf{x} = \int_\Omega \textbf{f}^g \cdot \textbf{v} d\textbf{x} \quad \forall \textbf{v} \in V
+$$
+Finely I discretesize the time($n$) and space($h$), $V_h\subset V$. Then $\textbf{u}$ becomes $\textbf{u}^{n}_{h}$. I define $\left\langle \cdot , \cdot \right\rangle$ as the $L^2\left( \Omega \right)$ norm. The above equation can be written as:
+
+\begin{equation}
+\left\langle D^{n}_{t} \textbf{u}^{\star}_{h} , v \right\rangle + \left\langle \textbf{u}^{n-1}_{h} \cdot \nabla \textbf{u}^{n-1}_{h} , \textbf{v} \right\rangle +  \left\langle \mu \nabla \textbf{u}^{\star}_{h} , \nabla \textbf{v} \right\rangle = \left\langle \textbf{f}^{g,n} , \textbf{v} \right\rangle \quad \forall \textbf{v} \in V_h
+\label{eq:discreteNS}
+\end{equation}
+  
+The projection give us these two equation:
+
+
+\begin{equation}
+\frac{\textbf{u}^{n}_{h} - \textbf{u}^{\star}_{h}}{k_n} + \nabla p^{n}_{h} = 0
+\label{eq:projection1}
+\end{equation}
+
+\begin{equation}
+\nabla \cdot \textbf{u}^{n}_{h} = 0
+\label{eq:projection2}
+\end{equation}
+
+where $k_h$ is the size of the local time step. I now multiply \ref{eq:projection1} with $\nabla q$ where $q \in Q_h \subset L^2\left(\Omega \right)$ and integrate. 
+
+$$
+\frac{1}{k_n} \int_{\Omega} \textbf{u}^{n}_{h} \cdot \nabla q - \textbf{u}^{\star}_{h} \cdot \nabla q + k_n \nabla p^{n}_{h} \cdot \nabla q dx = 0 \quad \forall q \in Q_h
+$$
+
+I integrate by parts the first two terms. The first term becomes zero from equation \ref{eq:projection2} and $\textbf{u}\mid_{d\Omega}$ = 0.
+
+$$
+\int_{\Omega} \left( \nabla \cdot \textbf{u}^{\star}_{h} \right)q/k_n + \left( \nabla p^{n}_{h} \cdot \nabla q\right)  dx = 0 \quad \forall q \in Q_h
+$$ 
+This can be written as:
+\begin{equation}
+\left\langle \nabla p^{n}_{h} , \nabla q\right\rangle  = - \left\langle \nabla \cdot \textbf{u}^{\star}_{h} , q \right\rangle /k_n \quad \forall q \in Q_h
+\label{eq:discreteProjection1}
+\end{equation}
+
+Finally I multiply equation \ref{eq:projection1} with $\textbf{v} \in V_h$ and integrate. I obtain:
+
+\begin{equation}
+\left\langle  \textbf{u}^{n}_{h} , v \right\rangle = \left\langle  \textbf{u}^{\star}_{h} , v \right\rangle - k_n\left\langle \nabla p^{n}_{h} , v\right\rangle \quad \forall v \in V_h
+\label{eq:discreteProjection2}
+\end{equation}
+
+The three equation \ref{eq:discreteNS}, \ref{eq:discreteProjection1} and \ref{eq:discreteProjection2} is the Chorin's projection method scheme for solving Navier-Stokes equation. Forklar rekke følgen og hva du løser for hver av ligningene
+
+
+\subsection*{Stability}
+%nevn at du støtte på advection diffusion problem. explici/simi implicit/ implicit
+%Nevn også at enten kan dt bli liten eller så kan petro -galerkin metoden.
+
+%This can be written as:
+%
+%\begin{equation}
+%\pi
+%\label{eq:projection1}
+%\end{equation}
+%
+%\begin{equation}
+%\Omega \phi_n 
+%\label{eq:projection2}
+%\end{equation}
 
 
 
