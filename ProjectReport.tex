@@ -117,42 +117,31 @@ The three equation \ref{eq:discreteNS}, \ref{eq:discreteProjection1} and \ref{eq
 
 
 \subsection*{Stability}
-%nevn at du støtte på advection diffusion problem. explici/simi implicit/ implicit
+When running the demo program I note that the speed is less then $1 mm/s$. My model is suppose to model blood flow throw arteries. The velocities throw arteries is about $1000 mm/s$, hence I need to turn up the pressure to acquire this velocity. \\
+After increasing the velocity in the demo program, it became unstable. The velocity started fluxing and became non-physically high. It turned out to be advection-diffusion that cause the unstable behaver: $\textbf{u} \cdot \nabla \textbf{u} \gg \mu \Delta \textbf{u}$. Similar problem will probably happen for the extension when: $\textbf{u} \cdot \nabla \phi \gg \mu \Delta \phi$.  
+%nevn at du søtte på advection diffusion problem. explici/simi implicit/ implicit
 %Nevn også at enten kan dt bli liten eller så kan petro -galerkin metoden.
 
 \section*{The extension}
-As mention earlier I have extended an already existing program. Making it also solve equation \ref{eq:MainPhi}. In order to do this I have to rewrite \ref{eq:MainPhi} to variation form. I multiply the test function $\phi \in \Psi \subset H^{1}_{0}\left( \Omega \right)$ and integrate.
+As mention earlier I have extended an already existing program. Making it also solve equation \ref{eq:MainPhi}. In order to do this I have to rewrite \ref{eq:MainPhi} to variation form. I multiply the test function $\psi \in \Psi \subset H^{1}_{0}\left( \Omega \right)$ and integrate.
 
 
 $$
-\int_{\Omega} \left( D_t \phi \right)\psi + \textbf{u}\cdot\left( \nabla \phi \right)\psi - C\left( \Delta\phi\right) \psi dx = - \int_{\Omega} R(\textbf{x}, t) \phi\psi dx
+\int_{\Omega} \left( D_t \phi \right)\psi + \textbf{u}\cdot\left( \nabla \phi \right)\psi - C\left( \Delta\phi\right) \psi dx = - \int_{\Omega} R(\textbf{x}, t) \phi\psi dx \quad \forall \psi \in \Psi
 $$
 
 
 after integrating by part and using backward euler as $D_t$, I obtain:
 $$
-\int_{\Omega} \left( \frac{\phi^n - \phi^{n-1}}{k_n}\right) \psi + \textbf{u}\cdot\left( \nabla \phi^n \right)\psi + C\left( \nabla\phi^n \cdot \nabla \psi \right) + R\left( \textbf{x}, t^n \right) \phi^n \psi dx = 0
+\int_{\Omega} \left( \frac{\phi^n - \phi^{n-1}}{k_n}\right) \psi + \textbf{u}\cdot\left( \nabla \phi^n \right)\psi + C\left( \nabla\phi^n \cdot \nabla \psi \right) + R\left( \textbf{x}, t^n \right) \phi^n \psi dx = 0 \quad \forall \psi \in \Psi
 $$
 I end up with the scheme:
 \begin{equation}
-\left\langle \phi^n -\phi^{n-1}, \psi \right\rangle \frac{1}{k_n} + \left\langle \psi \nabla \phi^n, \textbf{u}^n\right\rangle + C\left\langle \nabla \phi^n, \nabla \psi \right\rangle + \left\langle R\phi^n , \psi \right\rangle = 0
+\left\langle \phi^n -\phi^{n-1}, \psi \right\rangle \frac{1}{k_n} + \left\langle \psi \nabla \phi^n, \textbf{u}^n\right\rangle + C\left\langle \nabla \phi^n, \nabla \psi \right\rangle + \left\langle R\phi^n , \psi \right\rangle = 0 \quad \forall \psi \in \Psi_h
 \label{eq:discretephi}
 \end{equation}
 
-
-%This can be written as:
-%
-%\begin{equation}
-%\pi
-%\label{eq:projection1}
-%\end{equation}
-%
-%\begin{equation}
-%\Omega \phi_n 
-%\label{eq:projection2}
-%\end{equation}
-
-
+%Spesifiser problemt og hvilke konstanter, funcsjoner, BC, og IS jeg bruker. 
 
 
 %\verbatiminput{cinnforing.py}

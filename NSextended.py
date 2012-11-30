@@ -1,6 +1,8 @@
 # Begin demo
 
 from dolfin import *
+import time
+start_time = time.time()
 
 # Print log messages only from the root process in parallel
 parameters["std_out_all_processes"] = False;
@@ -24,14 +26,28 @@ psi=TestFunction(Q)
 dt = 0.01
 T = 3
 nu = 0.01
-C = 1.0 #Diffution constant
+C = 0.1 #Diffution constant
 
 # Define time-dependent pressure boundary condition
-p_in = Expression("2000*sin(3.0*t)", t=0.0)
+#p_in = Expression("2000*sin(3.0*t)", t=0.0)
+class MyExpression(Expression):
+    def __init__(self, t = 0.0):
+        self.t = t
+        Expression.__init__(self)
+
+    def eval(self, values, x):
+        tmp_value = 2000*sin(3.0*self.t)
+        if tmp_value < 0.0:
+            values[0] = 0.0
+        else: values[0] = tmp_value
+p_in = MyExpression();
 
 
 # Define the rate function
 R = Expression("(3*(1-x[0])*x[0]*(1-x[1])*x[1])*(t + 1)", t = 0.0)
+#R = Constant(0)
+#R = Expression("1*x[0]", t = 0.0)
+
 
 # Define boundary conditions
 noslip  = DirichletBC(V, (0, 0),
@@ -44,24 +60,22 @@ bcu = [noslip]
 bcp = [inflow, outflow]
 
 # Define boundray conditions on phi
-###Not tested
 noslipphi = DirichletBC(Q, 0, "on_boundary && \
                             (x[0] < DOLFIN_EPS | x[1] < DOLFIN_EPS | \
                                  (x[0] > 0.5 - DOLFIN_EPS && x[1] > 0.5 - DOLFIN_EPS))")
 inoutflow = DirichletBC(Q, 1, "x[1] > 1.0 - DOLFIN_EPS | \
                             x[0] > 1.0 - DOLFIN_EPS")
 bcphi = [noslipphi, inoutflow]
-###Not tested
+
 
 # Create functions
 u0 = Function(V)
 u1 = Function(V)
 p1 = Function(Q)
-phi0=Function(Q) # Maa ikke veare null
-#Problem, denne overskriver function egenskapen
-phi1=Expression("1.0")#Mulig jeg kan bruke Constant(1)
+phi0=Function(Q)
+phi1 = Constant(1) #Expression("1.0")
 phi0.assign(phi1)
-#u0.assign(u1)
+
 
 # Define coefficients
 k = Constant(dt)
@@ -82,14 +96,6 @@ a3 = inner(u, v)*dx
 L3 = inner(u1, v)*dx - k*inner(grad(p1), v)*dx
 
 # phi update
-
-print type(u)
-print '__________'
-print type(u1), len(u1)
-print '__________'
-#F4 = (1/k)*inner(phi-phi0, psi)*dx + inner(R*phi, psi)*dx + C*inner(grad(phi),grad(psi))*dx + inner(grad(phi)*u1,psi)*dx
-    #+ C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx
-
 F4 = (1/k)*inner(phi-phi0, psi)*dx + inner((grad(phi)*psi),u1)*dx \
     + C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx#Is this implicit?
 a4 = lhs(F4)
@@ -155,5 +161,13 @@ while t < T + DOLFIN_EPS:
     t += dt
     print "t =", t
 
+
+
+
+print 'Program used %g sec.' % start_time-time.time()
+
+
+
 # Hold plot
 interactive()
+
