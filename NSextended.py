@@ -2,7 +2,7 @@
 
 from dolfin import *
 import time
-start_time = time.time()
+time0 = time.time()
 
 # Print log messages only from the root process in parallel
 parameters["std_out_all_processes"] = False;
@@ -26,7 +26,7 @@ psi=TestFunction(Q)
 dt = 0.01
 T = 3
 nu = 0.01
-C = 0.1 #Diffution constant
+C = 10. #Diffution constant
 
 # Define time-dependent pressure boundary condition
 #p_in = Expression("2000*sin(3.0*t)", t=0.0)
@@ -44,8 +44,8 @@ p_in = MyExpression();
 
 
 # Define the rate function
-R = Expression("(3*(1-x[0])*x[0]*(1-x[1])*x[1])*(t + 1)", t = 0.0)
-#R = Constant(0)
+#R = Expression("(3*(1-x[0])*x[0]*(1-x[1])*x[1])*(t + 1)", t = 0.0)
+R = Constant(0)
 #R = Expression("1*x[0]", t = 0.0)
 
 
@@ -63,9 +63,9 @@ bcp = [inflow, outflow]
 noslipphi = DirichletBC(Q, 0, "on_boundary && \
                             (x[0] < DOLFIN_EPS | x[1] < DOLFIN_EPS | \
                                  (x[0] > 0.5 - DOLFIN_EPS && x[1] > 0.5 - DOLFIN_EPS))")
-inoutflow = DirichletBC(Q, 1, "x[1] > 1.0 - DOLFIN_EPS | \
-                            x[0] > 1.0 - DOLFIN_EPS")
-bcphi = [noslipphi, inoutflow]
+inflowphi = DirichletBC(Q, 1, "x[1] > 1.0 - DOLFIN_EPS")
+outflowphi = DirichletBC(Q, 0, "x[0] > 1.0 - DOLFIN_EPS")
+bcphi = [noslipphi, inflowphi, outflowphi]
 
 
 # Create functions
@@ -73,7 +73,7 @@ u0 = Function(V)
 u1 = Function(V)
 p1 = Function(Q)
 phi0=Function(Q)
-phi1 = Constant(1) #Expression("1.0")
+phi1 = Constant(0) #Expression("1.0")
 phi0.assign(phi1)
 
 
@@ -96,16 +96,19 @@ a3 = inner(u, v)*dx
 L3 = inner(u1, v)*dx - k*inner(grad(p1), v)*dx
 
 # phi update
-F4 = (1/k)*inner(phi-phi0, psi)*dx + inner((grad(phi)*psi),u1)*dx \
-    + C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx#Is this implicit?
-a4 = lhs(F4)
-L4 = rhs(F4)
+#Orginal
+#F4 = (1/k)*inner(phi-phi0, psi)*dx + inner((grad(phi)*psi),u1)*dx \
+#    + C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx#Is this implicit?
+##F4 = (1/k)*inner(phi-phi0, psi)*dx + inner(dot(u1,grad(phi)),psi)*dx \
+##    + C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx#Is this implicit?
+##a4 = lhs(F4)
+##L4 = rhs(F4)
 
 # Assemble matrices
 A1 = assemble(a1)
 A2 = assemble(a2)
 A3 = assemble(a3)
-A4 = assemble(a4)
+##A4 = assemble(a4)
 
 # Create files for storing solution
 ufile = File("results/velocity.pvd")
@@ -140,6 +143,13 @@ while t < T + DOLFIN_EPS:
     end()
     
     #Phi solveing
+    ##Debugging
+    F4 = (1/k)*inner(phi-phi0, psi)*dx + inner(dot(u1,grad(phi)),psi)*dx \
+    + C*inner(grad(phi),grad(psi))*dx + inner(R*phi, psi)*dx#Is this implicit?
+    a4 = lhs(F4)
+    L4 = rhs(F4)
+    A4 = assemble(a4)
+    ##
     begin("Computeing phi")
     b4 = assemble(L4)
     [bc.apply(A4, b4) for bc in bcphi]
@@ -164,7 +174,7 @@ while t < T + DOLFIN_EPS:
 
 
 
-print 'Program used %g sec.' % start_time-time.time()
+print 'Program used %g sec.' % (- time0 + time.time())
 
 
 
